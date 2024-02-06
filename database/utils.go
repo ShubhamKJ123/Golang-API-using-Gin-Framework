@@ -15,10 +15,10 @@ func QueryDB(query string, args ...interface{}) (*sql.Rows, error) {
 }
 
 // Helper function to execute a SQL statement and return the result.
-func ExecDB(query string, args ...interface{}) (sql.Result, error) {
-	result, err := DB.Exec(query, args...)
-	if err != nil {
-		return nil, err
-	}
-	return result, nil
+func ExecDB(db *sql.DB, query string, args ...interface{}) (sql.Result, error) {
+    result, err := db.Exec(query, args...)
+    if err != nil {
+        return nil, err
+    }
+    return result, nil
 }

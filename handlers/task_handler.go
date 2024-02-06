@@ -2,18 +2,19 @@
 package handlers
 
 import (
-	"database/sql"
 	"net/http"
 	"strconv"
+
 	"github.com/gin-gonic/gin"
+	"github.com/shubham/taskmanagement/database"
 )
 
 type Task struct {
-	ID          int       `json:"id"`
-	Title       string    `json:"title" binding:"required"`
-	Description string    `json:"description"`
-	DueDate     time.Time `json:"due_date"`
-	Status      string    `json:"status" binding:"oneof=pending in_progress completed"`
+	ID          int    `json:"id"`
+	Title       string `json:"title" binding:"required"`
+	Description string `json:"description"`
+	DueDate     string `json:"due_date"`
+	Status      string `json:"status" binding:"oneof=pending in_progress completed"`
 }
 
 func CreateTask(c *gin.Context) {
@@ -26,8 +27,7 @@ func CreateTask(c *gin.Context) {
 	}
 
 	// Insert new task into the database
-	result, err := execDB("INSERT INTO tasks (title, description, due_date, status) VALUES (?, ?, ?, ?)",
-		newTask.Title, newTask.Description, newTask.DueDate, newTask.Status)
+	result, err := database.ExecDB(database.DB, "INSERT INTO tasks (title, description, due_date, status) VALUES (?, ?, ?, ?)", newTask.Title, newTask.Description, newTask.DueDate, newTask.Status)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -43,12 +43,17 @@ func CreateTask(c *gin.Context) {
 }
 
 func GetTask(c *gin.Context) {
-	taskID := c.Param("id")
+	taskID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid task ID"})
+		return
+	}
 
 	var task Task
-	row := db.QueryRow("SELECT id, title, description, due_date, status FROM tasks WHERE id = ?", taskID)
-	err := row.Scan(&task.ID, &task.Title, &task.Description, &task.DueDate, &task.Status)
+	row := database.DB.QueryRow("SELECT id, title, description, due_date, status FROM tasks WHERE id = ?", taskID)
 
+	// Use the existing `err` variable for the Scan function
+	err = row.Scan(&task.ID, &task.Title, &task.Description, &task.DueDate, &task.Status)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
 		return
@@ -67,7 +72,7 @@ func UpdateTask(c *gin.Context) {
 	}
 
 	// Update the task in the database
-	_, err := execDB("UPDATE tasks SET title = ?, description = ?, due_date = ?, status = ? WHERE id = ?",
+	_, err := database.ExecDB(database.DB, "UPDATE tasks SET title = ?, description = ?, due_date = ?, status = ? WHERE id = ?",
 		updatedTask.Title, updatedTask.Description, updatedTask.DueDate, updatedTask.Status, taskID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
@@ -84,7 +89,7 @@ func DeleteTask(c *gin.Context) {
 	taskID := c.Param("id")
 
 	// Delete the task from the database
-	_, err := execDB("DELETE FROM tasks WHERE id = ?", taskID)
+	_, err := database.ExecDB(database.DB, "DELETE FROM tasks WHERE id = ?", taskID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
 		return
@@ -93,6 +98,25 @@ func DeleteTask(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Task deleted successfully"})
 }
 
-func ListTasks(c *gin.Context) {
-	// Implementation for listing all tasks
+func ListTask(c *gin.Context) {
+	rows, err := database.QueryDB("SELECT id, title, description, due_date, status FROM tasks")
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	defer rows.Close()
+
+	var tasks []Task
+
+	for rows.Next() {
+		var task Task
+		err := rows.Scan(&task.ID, &task.Title, &task.Description, &task.DueDate, &task.Status)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		tasks = append(tasks, task)
+	}
+
+	c.JSON(http.StatusOK, tasks)
 }
